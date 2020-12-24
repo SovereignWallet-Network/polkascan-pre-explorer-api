@@ -61,7 +61,8 @@ class JSONAPIResource(BaseResource):
                 "authors": [
                     "WEB3SCAN",
                     "POLKASCAN",
-                    "openAware BV"
+                    "openAware BV",
+                    "Metablockchain"
                 ]
             },
             'errors': [],

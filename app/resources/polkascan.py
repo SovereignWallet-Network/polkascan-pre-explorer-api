@@ -21,12 +21,13 @@ from hashlib import blake2b
 
 import binascii
 
+import json
 import falcon
 import pytz
 from dogpile.cache.api import NO_VALUE
 from scalecodec.type_registry import load_type_registry_preset
 from sqlalchemy import func, tuple_, or_
-from sqlalchemy.orm import defer, subqueryload, lazyload, lazyload_all
+from sqlalchemy.orm import defer, subqueryload, lazyload, lazyload_all, Query
 
 from app import settings
 from app.models.data import Block, Extrinsic, Event, RuntimeCall, RuntimeEvent, Runtime, RuntimeModule, \
@@ -119,14 +120,14 @@ class BlockTotalListResource(JSONAPIListResource):
     def apply_filters(self, query, params):
 
         if params.get('filter[author]'):
-
-            if len(params.get('filter[author]')) == 64:
-                account_id = params.get('filter[author]')
-            else:
-                try:
-                    account_id = ss58_decode(params.get('filter[author]'), settings.SUBSTRATE_ADDRESS_TYPE)
-                except ValueError:
-                    return query.filter(False)
+            account_id =  bytearray.fromhex(params.get('filter[author]').replace('0x','')).decode()
+            # if len(params.get('filter[author]')) == 64:
+            #     account_id = params.get('filter[author]')
+            # else:
+            #     try:
+            #         account_id = ss58_decode(params.get('filter[author]'), settings.SUBSTRATE_ADDRESS_TYPE)
+            #     except ValueError:
+            #         return query.filter(False)
 
             query = query.filter_by(author=account_id)
 
@@ -163,14 +164,16 @@ class ExtrinsicListResource(JSONAPIListResource):
     def apply_filters(self, query, params):
 
         if params.get('filter[address]'):
-
-            if len(params.get('filter[address]')) == 64:
-                account_id = params.get('filter[address]')
-            else:
-                try:
-                    account_id = ss58_decode(params.get('filter[address]'), settings.SUBSTRATE_ADDRESS_TYPE)
-                except ValueError:
-                    return query.filter(False)
+            
+            # Since we are storing balance in DID, we need to parse hex to did
+            account_id = bytearray.fromhex(params.get('filter[address]').replace('0x','')).decode()
+            # if len(params.get('filter[address]')) == 64:
+            #     account_id = params.get('filter[address]')
+            # else:
+            #     try:
+            #         account_id = ss58_decode(params.get('filter[address]'), settings.SUBSTRATE_ADDRESS_TYPE)
+            #     except ValueError:
+            #         return query.filter(False)
         else:
             account_id = None
 
@@ -316,14 +319,17 @@ class EventsListResource(JSONAPIListResource):
     def apply_filters(self, query, params):
 
         if params.get('filter[address]'):
-
-            if len(params.get('filter[address]')) == 64:
-                account_id = params.get('filter[address]')
-            else:
-                try:
-                    account_id = ss58_decode(params.get('filter[address]'), settings.SUBSTRATE_ADDRESS_TYPE)
-                except ValueError:
-                    return query.filter(False)
+            print('EventsListResource: ', params.get('filter[address]'))
+            
+            # Since we are storing balance in DID, we need to parse hex to did
+            account_id = bytearray.fromhex(params.get('filter[address]').replace('0x','')).decode()
+                # if len(params.get('filter[address]')) == 64:
+                #     account_id = params.get('filter[address]')
+                # else:
+                #     try:
+                #         account_id = ss58_decode(params.get('filter[address]'), settings.SUBSTRATE_ADDRESS_TYPE)
+                #     except ValueError:
+                #         return query.filter(False)
         else:
             account_id = None
 
@@ -367,7 +373,15 @@ class EventDetailResource(JSONAPIDetailResource):
     def get_item(self, item_id):
         if len(item_id.split('-')) != 2:
             return None
-        return Event.query(self.session).get(item_id.split('-'))
+        event_data = Event.query(self.session).get(item_id.split('-')) 
+        refactor_attribs = []
+        # Convert all Did type in events with human readable format
+        for attrib in event_data.attributes:
+            if attrib['type'] == 'Did':
+                attrib['value'] = bytearray.fromhex(attrib['value'].replace('0x','')).decode()
+            refactor_attribs.append(attrib)    
+        event_data.attributes = refactor_attribs;        
+        return event_data
 
     def serialize_item(self, item):
         data = item.serialize()
@@ -413,8 +427,9 @@ class NetworkStatisticsResource(JSONAPIResource):
         response = self.cache_region.get(cache_key, self.cache_expiration_time)
 
         if response is NO_VALUE:
-
+            print('stats not exist in cache!')
             best_block = BlockTotal.query(self.session).filter_by(id=self.session.query(func.max(BlockTotal.id)).one()[0]).first()
+            print("best_block: ",best_block.id)
             if best_block:
                 response = self.get_jsonapi_response(
                     data={
@@ -454,6 +469,198 @@ class NetworkStatisticsResource(JSONAPIResource):
 
         resp.media = response
 
+class BalanceTransferHistoryListResource(JSONAPIListResource):
+
+    def get_query(self):
+        return Event.query(self.session).filter(
+            Event.module_id == 'balances', Event.event_id == 'Transfer'
+        ).order_by(Event.block_id.desc())
+
+    def apply_filters(self, query, params):
+        print("query",query)
+        print("params",params)
+        if params.get('filter[address]'):
+            print('BalanceTransferHistoryListResource: ', params.get('filter[address]'))
+            if params.get('filter[address]')[0:2] == '0x':
+                # Raw DID
+                print('BalanceTransferHistory fetch by RAW DID')
+                account_id = params.get('filter[address]')
+            else:
+                # Convert text to hex & append with trailing 0's & hex prefix(0x)
+                print('BalanceTransferHistory fetch by DID')
+                account_id = '0x{:<064}'.format("".join("{:02x}".format(ord(c)) for c in params.get('filter[address]')))    
+            print('BalanceTransferHistoryListResource: account_id', account_id)
+            query = Event.query(self.session).filter(Event.attributes.contains([{"$[*].value":[account_id]}])==1).all().order_by(Event.block_id.desc())
+            # query = Query(Event).filter(Event.attributes.comparator.contains([account_id], '$[*].value'))
+
+        return query
+
+    def serialize_item(self, item):
+
+        if item.event_id == 'Transfer':
+            sender_data = {
+                'type': 'account',
+                'id': item.attributes[0]['value'].replace('0x', ''),
+                'attributes': {
+                    'id': item.attributes[0]['value'].replace('0x', ''),
+                    'address': bytearray.fromhex(item.attributes[0]['value'].replace('0x','')).decode()
+                    # 'address': ss58_encode(item.attributes[0]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
+                }
+            }
+
+            destination_data = {
+                'type': 'account',
+                'id': item.attributes[1]['value'].replace('0x', ''),
+                'attributes': {
+                    'id': item.attributes[1]['value'].replace('0x', ''),
+                    'address': bytearray.fromhex(item.attributes[1]['value'].replace('0x','')).decode()
+                    # 'address': ss58_encode(item.attributes[1]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
+                }
+            }
+            # Some networks don't have fees
+            if len(item.attributes) == 4:
+                fee = item.attributes[3]['value']
+            else:
+                fee = 0
+
+            value = item.attributes[2]['value']
+        elif item.event_id == 'Claimed':
+
+            fee = 0
+            sender_data = {'name': 'Claim', 'eth_address': item.attributes[1]['value']}
+            destination_data = {}
+            value = item.attributes[2]['value']
+
+        elif item.event_id == 'Deposit':
+
+            fee = 0
+            sender_data = {'name': 'Deposit'}
+            destination_data = {}
+            value = item.attributes[1]['value']
+
+        elif item.event_id == 'Reward':
+            fee = 0
+            sender_data = {'name': 'Staking reward'}
+            destination_data = {}
+            value = item.attributes[1]['value']
+        else:
+            sender_data = {}
+            fee = 0
+            destination_data = {}
+            value = None
+
+        return {
+            'type': 'balancetransfer',
+            'id': '{}-{}'.format(item.block_id, item.event_idx),
+            'attributes': {
+                'block_id': item.block_id,
+                'event_id': item.event_id,
+                'event_idx': '{}-{}'.format(item.block_id, item.event_idx),
+                'sender': sender_data,
+                'destination': destination_data,
+                'value': value,
+                'fee': fee
+            }
+        }
+
+
+
+# TODO: Temp hack. Need lot of refactoring 
+class BalanceTransferHistoryDetailResource(JSONAPIResource):
+    def on_get(self, req, resp, did=None):
+        transfer_data = [] 
+        resp.status = falcon.HTTP_200
+        if did:
+            print('BalanceTransferHistoryListResource: ', did)
+            if did[0:2] == '0x':
+                # Raw DID
+                print('BalanceTransferHistory fetch by RAW DID')
+                account_id = did
+            else:
+                # Convert text to hex & append with trailing 0's & hex prefix(0x)
+                print('BalanceTransferHistory fetch by DID')
+                account_id = "0x{:<064}".format("".join("{:02x}".format(ord(c)) for c in did))  
+                print("raw_did",account_id)  
+            # query = Event.query(self.session).filter(func.json_contains({'attributes':[{'value':account_id}]})).all()
+            # query = self.session().query(Event).filter(Event.attributes.contains({'value': account_id}))
+            # query = Event.query(self.session).filter(func.json_contains(Event.attributes,json.dumps(account_id), "$[0].value")==1).all()
+            # query = self.session().query(Event).filter(func.json_contains(Event.attributes, json.dumps(account_id), "$[0].value")==1).all()
+            # query = Query(Event).filter(Event.attributes.comparator.contains([account_id]))
+            resultproxy = self.session.execute("SELECT * FROM polkascan.data_event WHERE module_id='balances' AND event_id='Transfer' AND JSON_CONTAINS(attributes->'$[*].value', json_array('%s')) ORDER BY block_id DESC"% (account_id))
+            event_results = [{column: value for column, value in rowproxy.items()} for rowproxy in resultproxy]
+            events = []
+            for r in event_results:
+                events.append(
+                    Event(
+                        block_id=r['block_id'],
+                        event_idx=r['event_idx'],
+                        phase=r['phase'],
+                        extrinsic_idx=r['extrinsic_idx'],
+                        type=r['type'],
+                        spec_version_id=r['spec_version_id'],
+                        module_id=r['module_id'],
+                        event_id=r['event_id'],
+                        system=r['system'],
+                        module=r['module'] ,
+                        attributes=json.loads(r['attributes']),
+                        codec_error=r['codec_error']
+                    )
+                )
+            for i in events:
+                sender_data = {
+                    'type': 'account',
+                    'id': i.attributes[0]['value'].replace('0x', ''),
+                    'attributes': {
+                        'id': i.attributes[0]['value'].replace('0x', ''),
+                        'address': bytearray.fromhex(i.attributes[0]['value'].replace('0x','')).decode()
+                        # 'address': ss58_encode(item.attributes[0]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
+                    }
+                }
+
+                destination_data = {
+                    'type': 'account',
+                    'id': i.attributes[1]['value'].replace('0x', ''),
+                    'attributes': {
+                        'id': i.attributes[1]['value'].replace('0x', ''),
+                        'address': bytearray.fromhex(i.attributes[1]['value'].replace('0x','')).decode()
+                        # 'address': ss58_encode(item.attributes[1]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
+                    }
+                }
+
+                # Some networks don't have fees
+                if len(i.attributes) == 4:
+                    fee = i.attributes[3]['value']
+                else:
+                    fee = 0
+
+                transfer_data.append({
+                    'type': 'balancetransfer',
+                    'id': '{}-{}'.format(i.block_id, i.event_idx),
+                    'attributes': {
+                        'block_id': i.block_id,
+                        'event_idx': '{}-{}'.format(i.block_id, i.event_idx),
+                        'sender': sender_data,
+                        'destination': destination_data,
+                        'value': i.attributes[2]['value'],
+                        'fee': fee
+                    }
+                })
+            response = self.get_jsonapi_response(
+                    data=transfer_data
+                )
+            # hack for handling list of events 
+            # print("returning resp", json.dumps(transfer_data))
+            resp.body=json.dumps({
+                "data": transfer_data
+            })        
+        else:
+            resp.status = falcon.HTTP_400 
+            resp.body=json.dumps({
+                "data": [],
+                "error": "ParamterException: Required DID"
+            })       
+           
+    
 
 class BalanceTransferListResource(JSONAPIListResource):
 
@@ -464,14 +671,16 @@ class BalanceTransferListResource(JSONAPIListResource):
 
     def apply_filters(self, query, params):
         if params.get('filter[address]'):
-
-            if len(params.get('filter[address]')) == 64:
-                account_id = params.get('filter[address]')
-            else:
-                try:
-                    account_id = ss58_decode(params.get('filter[address]'), settings.SUBSTRATE_ADDRESS_TYPE)
-                except ValueError:
-                    return query.filter(False)
+            print('BalanceTransferListResource: ', params.get('filter[address]'))
+            # Since we are storing balance in DID, we need to parse hex to did
+            account_id = bytearray.fromhex(params.get('filter[address]').replace('0x','')).decode()
+            # if len(params.get('filter[address]')) == 64:
+            #     account_id = params.get('filter[address]')
+            # else:
+            #     try:
+            #         account_id = ss58_decode(params.get('filter[address]'), settings.SUBSTRATE_ADDRESS_TYPE)
+            #     except ValueError:
+            #         return query.filter(False)
 
             search_index = SearchIndex.query(self.session).filter(
                 SearchIndex.index_type_id.in_([
@@ -494,33 +703,35 @@ class BalanceTransferListResource(JSONAPIListResource):
 
         if item.event_id == 'Transfer':
 
-            sender = Account.query(self.session).get(item.attributes[0]['value'].replace('0x', ''))
+            # sender = Account.query(self.session).get(item.attributes[0]['value'].replace('0x', ''))
 
-            if sender:
-                sender_data = sender.serialize()
-            else:
-                sender_data = {
-                    'type': 'account',
+            # if sender:
+            #     sender_data = sender.serialize()
+            # else:
+            sender_data = {
+                'type': 'account',
+                'id': item.attributes[0]['value'].replace('0x', ''),
+                'attributes': {
                     'id': item.attributes[0]['value'].replace('0x', ''),
-                    'attributes': {
-                        'id': item.attributes[0]['value'].replace('0x', ''),
-                        'address': ss58_encode(item.attributes[0]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
-                    }
+                    'address': bytearray.fromhex(item.attributes[0]['value'].replace('0x','')).decode()
+                    # 'address': ss58_encode(item.attributes[0]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
                 }
+            }
 
-            destination = Account.query(self.session).get(item.attributes[1]['value'].replace('0x', ''))
+            # destination = Account.query(self.session).get(item.attributes[1]['value'].replace('0x', ''))
 
-            if destination:
-                destination_data = destination.serialize()
-            else:
-                destination_data = {
-                    'type': 'account',
+            # if destination:
+            #     destination_data = destination.serialize()
+            # else:
+            destination_data = {
+                'type': 'account',
+                'id': item.attributes[1]['value'].replace('0x', ''),
+                'attributes': {
                     'id': item.attributes[1]['value'].replace('0x', ''),
-                    'attributes': {
-                        'id': item.attributes[1]['value'].replace('0x', ''),
-                        'address': ss58_encode(item.attributes[1]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
-                    }
+                    'address': bytearray.fromhex(item.attributes[1]['value'].replace('0x','')).decode()
+                    # 'address': ss58_encode(item.attributes[1]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
                 }
+            }
             # Some networks don't have fees
             if len(item.attributes) == 4:
                 fee = item.attributes[3]['value']
@@ -575,33 +786,35 @@ class BalanceTransferDetailResource(JSONAPIDetailResource):
 
     def serialize_item(self, item):
 
-        sender = Account.query(self.session).get(item.attributes[0]['value'].replace('0x', ''))
+        # sender = Account.query(self.session).get(item.attributes[0]['value'].replace('0x', ''))
 
-        if sender:
-            sender_data = sender.serialize()
-        else:
-            sender_data = {
-                'type': 'account',
+        # if sender:
+        #     sender_data = sender.serialize()
+        # else:
+        sender_data = {
+            'type': 'account',
+            'id': item.attributes[0]['value'].replace('0x', ''),
+            'attributes': {
                 'id': item.attributes[0]['value'].replace('0x', ''),
-                'attributes': {
-                    'id': item.attributes[0]['value'].replace('0x', ''),
-                    'address': ss58_encode(item.attributes[0]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
-                }
+                'address': bytearray.fromhex(item.attributes[0]['value'].replace('0x','')).decode()
+                # 'address': ss58_encode(item.attributes[0]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
             }
+        }
 
-        destination = Account.query(self.session).get(item.attributes[1]['value'].replace('0x', ''))
+        # destination = Account.query(self.session).get(item.attributes[1]['value'].replace('0x', ''))
 
-        if destination:
-            destination_data = destination.serialize()
-        else:
-            destination_data = {
-                'type': 'account',
+        # if destination:
+        #     destination_data = destination.serialize()
+        # else:
+        destination_data = {
+            'type': 'account',
+            'id': item.attributes[1]['value'].replace('0x', ''),
+            'attributes': {
                 'id': item.attributes[1]['value'].replace('0x', ''),
-                'attributes': {
-                    'id': item.attributes[1]['value'].replace('0x', ''),
-                    'address': ss58_encode(item.attributes[1]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
-                }
+                'address': bytearray.fromhex(item.attributes[1]['value'].replace('0x','')).decode()
+                # 'address': ss58_encode(item.attributes[1]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
             }
+        }
 
         # Some networks don't have fees
         if len(item.attributes) == 4:
@@ -735,104 +948,128 @@ class AccountDetailResource(JSONAPIDetailResource):
 
             substrate = SubstrateInterface(settings.SUBSTRATE_RPC_URL)
 
-            if settings.SUBSTRATE_STORAGE_BALANCE == 'Account':
-                storage_call = RuntimeStorage.query(self.session).filter_by(
-                    module_id='system',
-                    name='Account',
-                ).order_by(RuntimeStorage.spec_version.desc()).first()
+            # if settings.SUBSTRATE_STORAGE_BALANCE == 'Account':
+            #     storage_call = RuntimeStorage.query(self.session).filter_by(
+            #         module_id='system',
+            #         name='Account',
+            #     ).order_by(RuntimeStorage.spec_version.desc()).first()
 
-                if storage_call:
-                    account_data = substrate.get_storage(
-                        block_hash=None,
-                        module='System',
-                        function='Account',
-                        params=item.id,
-                        return_scale_type=storage_call.type_value,
-                        hasher=storage_call.type_hasher,
-                        metadata_version=settings.SUBSTRATE_METADATA_VERSION
-                    )
+            #     if storage_call:
+            #         account_data = substrate.get_storage(
+            #             block_hash=None,
+            #             module='System',
+            #             function='Account',
+            #             params=item.id,
+            #             return_scale_type=storage_call.type_value,
+            #             hasher=storage_call.type_hasher,
+            #             metadata_version=settings.SUBSTRATE_METADATA_VERSION
+            #         )
 
-                    if account_data:
-                        data['attributes']['free_balance'] = account_data['data']['free']
-                        data['attributes']['reserved_balance'] = account_data['data']['reserved']
-                        data['attributes']['misc_frozen_balance'] = account_data['data']['miscFrozen']
-                        data['attributes']['fee_frozen_balance'] = account_data['data']['feeFrozen']
-                        data['attributes']['nonce'] = account_data['nonce']
+            #         if account_data:
+            #             data['attributes']['free_balance'] = account_data['data']['free']
+            #             data['attributes']['reserved_balance'] = account_data['data']['reserved']
+            #             data['attributes']['misc_frozen_balance'] = account_data['data']['miscFrozen']
+            #             data['attributes']['fee_frozen_balance'] = account_data['data']['feeFrozen']
+            #             data['attributes']['nonce'] = account_data['nonce']
 
-            elif settings.SUBSTRATE_STORAGE_BALANCE == 'Balances.Account':
+            # elif settings.SUBSTRATE_STORAGE_BALANCE == 'Balances.Account':
 
-                storage_call = RuntimeStorage.query(self.session).filter_by(
-                    module_id='balances',
-                    name='Account',
-                ).order_by(RuntimeStorage.spec_version.desc()).first()
+            #     storage_call = RuntimeStorage.query(self.session).filter_by(
+            #         module_id='balances',
+            #         name='Account',
+            #     ).order_by(RuntimeStorage.spec_version.desc()).first()
 
-                if storage_call:
-                    account_data = substrate.get_storage(
-                        block_hash=None,
-                        module='Balances',
-                        function='Account',
-                        params=item.id,
-                        return_scale_type=storage_call.type_value,
-                        hasher=storage_call.type_hasher,
-                        metadata_version=settings.SUBSTRATE_METADATA_VERSION
-                    )
+            #     if storage_call:
+            #         account_data = substrate.get_storage(
+            #             block_hash=None,
+            #             module='Balances',
+            #             function='Account',
+            #             params=item.id,
+            #             return_scale_type=storage_call.type_value,
+            #             hasher=storage_call.type_hasher,
+            #             metadata_version=settings.SUBSTRATE_METADATA_VERSION
+            #         )
 
-                    if account_data:
-                        data['attributes']['balance_free'] = account_data['free']
-                        data['attributes']['balance_reserved'] = account_data['reserved']
-                        data['attributes']['misc_frozen_balance'] = account_data['miscFrozen']
-                        data['attributes']['fee_frozen_balance'] = account_data['feeFrozen']
-                        data['attributes']['nonce'] = None
-            else:
+            #         if account_data:
+            #             data['attributes']['balance_free'] = account_data['free']
+            #             data['attributes']['balance_reserved'] = account_data['reserved']
+            #             data['attributes']['misc_frozen_balance'] = account_data['miscFrozen']
+            #             data['attributes']['fee_frozen_balance'] = account_data['feeFrozen']
+            #             data['attributes']['nonce'] = None
+            # elif settings.SUBSTRATE_STORAGE_BALANCE == 'Did.Account':
+            print('Did account type')
+            storage_call = RuntimeStorage.query(self.session).filter_by(
+                module_id='did',
+                name='Account',
+            ).order_by(RuntimeStorage.spec_version.desc()).first()
 
-                storage_call = RuntimeStorage.query(self.session).filter_by(
-                    module_id='balances',
-                    name='FreeBalance',
-                ).order_by(RuntimeStorage.spec_version.desc()).first()
+            if storage_call:
+                account_data = substrate.get_storage(
+                    block_hash=None,
+                    module='Did',
+                    function='Account',
+                    params=item.id,
+                    return_scale_type=storage_call.type_value,
+                    hasher=storage_call.type_hasher,
+                    metadata_version=settings.SUBSTRATE_METADATA_VERSION
+                )
 
-                if storage_call:
-                    data['attributes']['free_balance'] = substrate.get_storage(
-                        block_hash=None,
-                        module='Balances',
-                        function='FreeBalance',
-                        params=item.id,
-                        return_scale_type=storage_call.type_value,
-                        hasher=storage_call.type_hasher,
-                        metadata_version=settings.SUBSTRATE_METADATA_VERSION
-                    )
+                if account_data:
+                    data['attributes']['balance_free'] = account_data['free']
+                    data['attributes']['balance_reserved'] = account_data['reserved']
+                    data['attributes']['misc_frozen_balance'] = account_data['miscFrozen']
+                    data['attributes']['fee_frozen_balance'] = account_data['feeFrozen']
+                    data['attributes']['nonce'] = None
+            # else:
 
-                storage_call = RuntimeStorage.query(self.session).filter_by(
-                    module_id='balances',
-                    name='ReservedBalance',
-                ).order_by(RuntimeStorage.spec_version.desc()).first()
+            #     storage_call = RuntimeStorage.query(self.session).filter_by(
+            #         module_id='balances',
+            #         name='FreeBalance',
+            #     ).order_by(RuntimeStorage.spec_version.desc()).first()
 
-                if storage_call:
-                    data['attributes']['reserved_balance'] = substrate.get_storage(
-                        block_hash=None,
-                        module='Balances',
-                        function='ReservedBalance',
-                        params=item.id,
-                        return_scale_type=storage_call.type_value,
-                        hasher=storage_call.type_hasher,
-                        metadata_version=settings.SUBSTRATE_METADATA_VERSION
-                    )
+            #     if storage_call:
+            #         data['attributes']['free_balance'] = substrate.get_storage(
+            #             block_hash=None,
+            #             module='Balances',
+            #             function='FreeBalance',
+            #             params=item.id,
+            #             return_scale_type=storage_call.type_value,
+            #             hasher=storage_call.type_hasher,
+            #             metadata_version=settings.SUBSTRATE_METADATA_VERSION
+            #         )
 
-                storage_call = RuntimeStorage.query(self.session).filter_by(
-                    module_id='system',
-                    name='AccountNonce',
-                ).order_by(RuntimeStorage.spec_version.desc()).first()
+            #     storage_call = RuntimeStorage.query(self.session).filter_by(
+            #         module_id='balances',
+            #         name='ReservedBalance',
+            #     ).order_by(RuntimeStorage.spec_version.desc()).first()
 
-                if storage_call:
+            #     if storage_call:
+            #         data['attributes']['reserved_balance'] = substrate.get_storage(
+            #             block_hash=None,
+            #             module='Balances',
+            #             function='ReservedBalance',
+            #             params=item.id,
+            #             return_scale_type=storage_call.type_value,
+            #             hasher=storage_call.type_hasher,
+            #             metadata_version=settings.SUBSTRATE_METADATA_VERSION
+            #         )
 
-                    data['attributes']['nonce'] = substrate.get_storage(
-                        block_hash=None,
-                        module='System',
-                        function='AccountNonce',
-                        params=item.id,
-                        return_scale_type=storage_call.type_value,
-                        hasher=storage_call.type_hasher,
-                        metadata_version=settings.SUBSTRATE_METADATA_VERSION
-                    )
+            #     storage_call = RuntimeStorage.query(self.session).filter_by(
+            #         module_id='system',
+            #         name='AccountNonce',
+            #     ).order_by(RuntimeStorage.spec_version.desc()).first()
+
+            #     if storage_call:
+
+            #         data['attributes']['nonce'] = substrate.get_storage(
+            #             block_hash=None,
+            #             module='System',
+            #             function='AccountNonce',
+            #             params=item.id,
+            #             return_scale_type=storage_call.type_value,
+            #             hasher=storage_call.type_hasher,
+            #             metadata_version=settings.SUBSTRATE_METADATA_VERSION
+            #         )
 
         return data
 

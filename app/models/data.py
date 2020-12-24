@@ -545,6 +545,7 @@ class AccountIndex(BaseModel):
     def serialize_formatting_hook(self, obj_dict):
         obj_dict['attributes']['account_id'] = self.account_id
         if self.account_id:
+            # obj_dict['attributes']['address'] = bytearray.fromhex(self.account_id.replace('0x', '')).decode()
             obj_dict['attributes']['address'] = ss58_encode(self.account_id.replace('0x', ''), SUBSTRATE_ADDRESS_TYPE)
         else:
             obj_dict['attributes']['address'] = None
