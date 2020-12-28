@@ -371,6 +371,9 @@ class Extrinsic(BaseModel):
                 for proposal_param in item['value'].get('call_args', []):
                     if proposal_param['type'] == 'Address':
                         self.format_address(proposal_param)
+            # parse DID to show human readable DID in extrinsic details
+            elif item['type'] == 'Did':
+                item['value'] = bytearray.fromhex(item['value'].replace('0x','')).decode()
 
         return obj_dict
 

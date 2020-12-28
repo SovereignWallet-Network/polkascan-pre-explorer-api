@@ -429,7 +429,7 @@ class NetworkStatisticsResource(JSONAPIResource):
         if response is NO_VALUE:
             print('stats not exist in cache!')
             best_block = BlockTotal.query(self.session).filter_by(id=self.session.query(func.max(BlockTotal.id)).one()[0]).first()
-            print("best_block: ",best_block.id)
+            # print("best_block: ",best_block.id)
             if best_block:
                 response = self.get_jsonapi_response(
                     data={
@@ -632,12 +632,13 @@ class BalanceTransferHistoryDetailResource(JSONAPIResource):
                     fee = i.attributes[3]['value']
                 else:
                     fee = 0
-
+                block = Block.query(self.session).get(i.block_id)
                 transfer_data.append({
                     'type': 'balancetransfer',
                     'id': '{}-{}'.format(i.block_id, i.event_idx),
                     'attributes': {
                         'block_id': i.block_id,
+                        'datetime': block.datetime.replace(tzinfo=pytz.UTC).isoformat(),
                         'event_idx': '{}-{}'.format(i.block_id, i.event_idx),
                         'sender': sender_data,
                         'destination': destination_data,
