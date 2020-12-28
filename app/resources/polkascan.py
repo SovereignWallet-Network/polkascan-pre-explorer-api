@@ -612,7 +612,7 @@ class BalanceTransferHistoryDetailResource(JSONAPIResource):
                     'id': i.attributes[0]['value'].replace('0x', ''),
                     'attributes': {
                         'id': i.attributes[0]['value'].replace('0x', ''),
-                        'address': bytearray.fromhex(i.attributes[0]['value'].replace('0x','')).decode()
+                        'address': bytearray.fromhex(i.attributes[0]['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
                         # 'address': ss58_encode(item.attributes[0]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
                     }
                 }
@@ -622,7 +622,7 @@ class BalanceTransferHistoryDetailResource(JSONAPIResource):
                     'id': i.attributes[1]['value'].replace('0x', ''),
                     'attributes': {
                         'id': i.attributes[1]['value'].replace('0x', ''),
-                        'address': bytearray.fromhex(i.attributes[1]['value'].replace('0x','')).decode()
+                        'address': bytearray.fromhex(i.attributes[1]['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
                         # 'address': ss58_encode(item.attributes[1]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
                     }
                 }
