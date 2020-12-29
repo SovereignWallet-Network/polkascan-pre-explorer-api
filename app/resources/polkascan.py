@@ -287,6 +287,16 @@ class ExtrinsicDetailResource(JSONAPIDetailResource):
         if item.params:
             item.params = self.check_params(item.params, item.serialize_id())
 
+        if item.module_id == 'balances' and item.call_id=='transfer':
+            event_data = Event.query(self.session).filter_by(
+                block_id=item.block_id,
+                event_id='Transfer',
+                extrinsic_idx=item.extrinsic_idx
+            ).first()
+            if event_data:
+                # print("event", event_data.attributes)
+                data['attributes']['event_params']= event_data.attributes
+
         if item.error:
             # Retrieve ExtrinsicFailed event
             extrinsic_failed_event = Event.query(self.session).filter_by(
@@ -428,7 +438,9 @@ class NetworkStatisticsResource(JSONAPIResource):
 
         if response is NO_VALUE:
             print('stats not exist in cache!')
-            best_block = BlockTotal.query(self.session).filter_by(id=self.session.query(func.max(BlockTotal.id)).one()[0]).first()
+            # Temporary hack to get the network stats
+            # TODO: Fix BlockTotal saving to DB
+            best_block = Block.query(self.session).filter_by(id=self.session.query(func.max(Block.id)).one()[0]).first()
             # print("best_block: ",best_block.id)
             if best_block:
                 response = self.get_jsonapi_response(
@@ -437,11 +449,11 @@ class NetworkStatisticsResource(JSONAPIResource):
                         'id': network_id,
                         'attributes': {
                             'best_block': best_block.id,
-                            'total_signed_extrinsics': int(best_block.total_extrinsics_signed),
-                            'total_events': int(best_block.total_events),
-                            'total_events_module': int(best_block.total_events_module),
-                            'total_blocks': 'N/A',
-                            'total_accounts': int(best_block.total_accounts),
+                            'total_signed_extrinsics': Extrinsic.query(self.session).filter_by(signed=True).count(),
+                            'total_events': Event.query(self.session).count(),
+                            'total_events_module': Event.query(self.session).filter_by(system=False).count(),
+                            'total_blocks': Block.query(self.session).count(),
+                            'total_accounts': 0,
                             'total_runtimes': Runtime.query(self.session).count()
                         }
                     },
