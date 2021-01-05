@@ -388,7 +388,7 @@ class EventDetailResource(JSONAPIDetailResource):
         # Convert all Did type in events with human readable format
         for attrib in event_data.attributes:
             if attrib['type'] == 'Did':
-                attrib['value'] = bytearray.fromhex(attrib['value'].replace('0x','')).decode()
+                attrib['value'] = bytearray.fromhex(attrib['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
             refactor_attribs.append(attrib)    
         event_data.attributes = refactor_attribs;        
         return event_data
@@ -515,7 +515,7 @@ class BalanceTransferHistoryListResource(JSONAPIListResource):
                 'id': item.attributes[0]['value'].replace('0x', ''),
                 'attributes': {
                     'id': item.attributes[0]['value'].replace('0x', ''),
-                    'address': bytearray.fromhex(item.attributes[0]['value'].replace('0x','')).decode()
+                    'address': bytearray.fromhex(item.attributes[0]['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
                     # 'address': ss58_encode(item.attributes[0]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
                 }
             }
@@ -525,7 +525,7 @@ class BalanceTransferHistoryListResource(JSONAPIListResource):
                 'id': item.attributes[1]['value'].replace('0x', ''),
                 'attributes': {
                     'id': item.attributes[1]['value'].replace('0x', ''),
-                    'address': bytearray.fromhex(item.attributes[1]['value'].replace('0x','')).decode()
+                    'address': bytearray.fromhex(item.attributes[1]['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
                     # 'address': ss58_encode(item.attributes[1]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
                 }
             }
@@ -726,7 +726,7 @@ class BalanceTransferListResource(JSONAPIListResource):
                 'id': item.attributes[0]['value'].replace('0x', ''),
                 'attributes': {
                     'id': item.attributes[0]['value'].replace('0x', ''),
-                    'address': bytearray.fromhex(item.attributes[0]['value'].replace('0x','')).decode()
+                    'address': bytearray.fromhex(item.attributes[0]['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
                     # 'address': ss58_encode(item.attributes[0]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
                 }
             }
@@ -741,7 +741,7 @@ class BalanceTransferListResource(JSONAPIListResource):
                 'id': item.attributes[1]['value'].replace('0x', ''),
                 'attributes': {
                     'id': item.attributes[1]['value'].replace('0x', ''),
-                    'address': bytearray.fromhex(item.attributes[1]['value'].replace('0x','')).decode()
+                    'address': bytearray.fromhex(item.attributes[1]['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
                     # 'address': ss58_encode(item.attributes[1]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
                 }
             }
@@ -809,7 +809,7 @@ class BalanceTransferDetailResource(JSONAPIDetailResource):
             'id': item.attributes[0]['value'].replace('0x', ''),
             'attributes': {
                 'id': item.attributes[0]['value'].replace('0x', ''),
-                'address': bytearray.fromhex(item.attributes[0]['value'].replace('0x','')).decode()
+                'address': bytearray.fromhex(item.attributes[0]['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
                 # 'address': ss58_encode(item.attributes[0]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
             }
         }
@@ -824,7 +824,7 @@ class BalanceTransferDetailResource(JSONAPIDetailResource):
             'id': item.attributes[1]['value'].replace('0x', ''),
             'attributes': {
                 'id': item.attributes[1]['value'].replace('0x', ''),
-                'address': bytearray.fromhex(item.attributes[1]['value'].replace('0x','')).decode()
+                'address': bytearray.fromhex(item.attributes[1]['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
                 # 'address': ss58_encode(item.attributes[1]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
             }
         }
