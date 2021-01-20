@@ -389,7 +389,7 @@ class EventDetailResource(JSONAPIDetailResource):
         for attrib in event_data.attributes:
             if attrib['type'] == 'Did':
                 s = bytearray.fromhex(attrib['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
-                attrib['value'] = s[:settings.STR_MASK_LEN].ljust(len(s), "*")
+                attrib['value'] = s[:settings.STR_MASK_LEN].ljust(settings.STR_DID_LEN, "*")
             refactor_attribs.append(attrib)    
         event_data.attributes = refactor_attribs;        
         return event_data
@@ -517,7 +517,7 @@ class BalanceTransferHistoryListResource(JSONAPIListResource):
                 'id': item.attributes[0]['value'].replace('0x', ''),
                 'attributes': {
                     'id': item.attributes[0]['value'].replace('0x', ''),
-                    'address': s[:settings.STR_MASK_LEN].ljust(len(s), "*")
+                    'address': s[:settings.STR_MASK_LEN].ljust(settings.STR_DID_LEN, "*")
                     # 'address': ss58_encode(item.attributes[0]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
                 }
             }
@@ -527,7 +527,7 @@ class BalanceTransferHistoryListResource(JSONAPIListResource):
                 'id': item.attributes[1]['value'].replace('0x', ''),
                 'attributes': {
                     'id': item.attributes[1]['value'].replace('0x', ''),
-                    'address': s[:settings.STR_MASK_LEN].ljust(len(s), "*")
+                    'address': s[:settings.STR_MASK_LEN].ljust(settings.STR_DID_LEN, "*")
                     # 'address': ss58_encode(item.attributes[1]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
                 }
             }
@@ -627,7 +627,7 @@ class BalanceTransferHistoryDetailResource(JSONAPIResource):
                     'id': i.attributes[0]['value'].replace('0x', ''),
                     'attributes': {
                         'id': i.attributes[0]['value'].replace('0x', ''),
-                        'address': s[:settings.STR_MASK_LEN].ljust(len(s), "*")
+                        'address': s[:settings.STR_MASK_LEN].ljust(settings.STR_DID_LEN, "*")
                         # 'address': ss58_encode(item.attributes[0]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
                     }
                 }
@@ -637,7 +637,7 @@ class BalanceTransferHistoryDetailResource(JSONAPIResource):
                     'id': i.attributes[1]['value'].replace('0x', ''),
                     'attributes': {
                         'id': i.attributes[1]['value'].replace('0x', ''),
-                        'address': s[:settings.STR_MASK_LEN].ljust(len(s), "*")
+                        'address': s[:settings.STR_MASK_LEN].ljust(settings.STR_DID_LEN, "*")
                         # 'address': ss58_encode(item.attributes[1]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
                     }
                 }
@@ -730,7 +730,7 @@ class BalanceTransferListResource(JSONAPIListResource):
                 'id': item.attributes[0]['value'].replace('0x', ''),
                 'attributes': {
                     'id': item.attributes[0]['value'].replace('0x', ''),
-                    'address': s[:settings.STR_MASK_LEN].ljust(len(s), "*")
+                    'address': s[:settings.STR_MASK_LEN].ljust(settings.STR_DID_LEN, "*")
                     # 'address': ss58_encode(item.attributes[0]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
                 }
             }
@@ -746,7 +746,7 @@ class BalanceTransferListResource(JSONAPIListResource):
                 'id': item.attributes[1]['value'].replace('0x', ''),
                 'attributes': {
                     'id': item.attributes[1]['value'].replace('0x', ''),
-                    'address': s[:settings.STR_MASK_LEN].ljust(len(s), "*")
+                    'address': s[:settings.STR_MASK_LEN].ljust(settings.STR_DID_LEN, "*")
                     # 'address': ss58_encode(item.attributes[1]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
                 }
             }
@@ -815,7 +815,7 @@ class BalanceTransferDetailResource(JSONAPIDetailResource):
             'id': item.attributes[0]['value'].replace('0x', ''),
             'attributes': {
                 'id': item.attributes[0]['value'].replace('0x', ''),
-                'address': s[:settings.STR_MASK_LEN].ljust(len(s), "*")
+                'address': s[:settings.STR_MASK_LEN].ljust(settings.STR_DID_LEN, "*")
                 # 'address': ss58_encode(item.attributes[0]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
             }
         }
@@ -831,7 +831,7 @@ class BalanceTransferDetailResource(JSONAPIDetailResource):
             'id': item.attributes[1]['value'].replace('0x', ''),
             'attributes': {
                 'id': item.attributes[1]['value'].replace('0x', ''),
-                'address': s[:settings.STR_MASK_LEN].ljust(len(s), "*")
+                'address': s[:settings.STR_MASK_LEN].ljust(settings.STR_DID_LEN, "*")
                 # 'address': ss58_encode(item.attributes[1]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
             }
         }
