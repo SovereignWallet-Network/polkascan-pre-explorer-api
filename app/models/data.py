@@ -25,7 +25,7 @@ from sqlalchemy.dialects.mysql import LONGTEXT
 
 from app.models.base import BaseModel
 from app.utils.ss58 import ss58_encode, ss58_encode_account_index
-from app.settings import LOG_TYPE_AUTHORITIESCHANGE, SUBSTRATE_ADDRESS_TYPE
+from app.settings import LOG_TYPE_AUTHORITIESCHANGE, SUBSTRATE_ADDRESS_TYPE, STR_MASK_LEN
 
 
 class Account(BaseModel):
@@ -373,7 +373,8 @@ class Extrinsic(BaseModel):
                         self.format_address(proposal_param)
             # parse DID to show human readable DID in extrinsic details
             elif item['type'] == 'Did':
-                item['value'] = bytearray.fromhex(item['value'].replace('0x','')).decode()
+                s = bytearray.fromhex(item['value'].replace('0x','')).decode()
+                item['value'] = s[:STR_MASK_LEN].ljust(len(s), "*")
 
         return obj_dict
 

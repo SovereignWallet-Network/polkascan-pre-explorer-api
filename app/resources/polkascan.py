@@ -388,7 +388,8 @@ class EventDetailResource(JSONAPIDetailResource):
         # Convert all Did type in events with human readable format
         for attrib in event_data.attributes:
             if attrib['type'] == 'Did':
-                attrib['value'] = bytearray.fromhex(attrib['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
+                s = bytearray.fromhex(attrib['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
+                attrib['value'] = s[:settings.STR_MASK_LEN].ljust(len(s), "*")
             refactor_attribs.append(attrib)    
         event_data.attributes = refactor_attribs;        
         return event_data
@@ -510,22 +511,23 @@ class BalanceTransferHistoryListResource(JSONAPIListResource):
     def serialize_item(self, item):
 
         if item.event_id == 'Transfer':
+            s = bytearray.fromhex(item.attributes[0]['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
             sender_data = {
                 'type': 'account',
                 'id': item.attributes[0]['value'].replace('0x', ''),
                 'attributes': {
                     'id': item.attributes[0]['value'].replace('0x', ''),
-                    'address': bytearray.fromhex(item.attributes[0]['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
+                    'address': s[:settings.STR_MASK_LEN].ljust(len(s), "*")
                     # 'address': ss58_encode(item.attributes[0]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
                 }
             }
-
+            s = bytearray.fromhex(item.attributes[1]['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
             destination_data = {
                 'type': 'account',
                 'id': item.attributes[1]['value'].replace('0x', ''),
                 'attributes': {
                     'id': item.attributes[1]['value'].replace('0x', ''),
-                    'address': bytearray.fromhex(item.attributes[1]['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
+                    'address': s[:settings.STR_MASK_LEN].ljust(len(s), "*")
                     # 'address': ss58_encode(item.attributes[1]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
                 }
             }
@@ -598,7 +600,7 @@ class BalanceTransferHistoryDetailResource(JSONAPIResource):
             # query = Event.query(self.session).filter(func.json_contains(Event.attributes,json.dumps(account_id), "$[0].value")==1).all()
             # query = self.session().query(Event).filter(func.json_contains(Event.attributes, json.dumps(account_id), "$[0].value")==1).all()
             # query = Query(Event).filter(Event.attributes.comparator.contains([account_id]))
-            resultproxy = self.session.execute("SELECT * FROM polkascan.data_event WHERE module_id='balances' AND event_id='Transfer' AND JSON_CONTAINS(attributes->'$[*].value', json_array('%s')) ORDER BY block_id DESC"% (account_id))
+            resultproxy = self.session.execute("SELECT * FROM %s.data_event WHERE module_id='balances' AND event_id='Transfer' AND JSON_CONTAINS(attributes->'$[*].value', json_array('%s')) ORDER BY block_id DESC"% (settings.DB_NAME, account_id))
             event_results = [{column: value for column, value in rowproxy.items()} for rowproxy in resultproxy]
             events = []
             for r in event_results:
@@ -619,22 +621,23 @@ class BalanceTransferHistoryDetailResource(JSONAPIResource):
                     )
                 )
             for i in events:
+                s = bytearray.fromhex(i.attributes[0]['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
                 sender_data = {
                     'type': 'account',
                     'id': i.attributes[0]['value'].replace('0x', ''),
                     'attributes': {
                         'id': i.attributes[0]['value'].replace('0x', ''),
-                        'address': bytearray.fromhex(i.attributes[0]['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
+                        'address': s[:settings.STR_MASK_LEN].ljust(len(s), "*")
                         # 'address': ss58_encode(item.attributes[0]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
                     }
                 }
-
+                s = bytearray.fromhex(i.attributes[1]['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
                 destination_data = {
                     'type': 'account',
                     'id': i.attributes[1]['value'].replace('0x', ''),
                     'attributes': {
                         'id': i.attributes[1]['value'].replace('0x', ''),
-                        'address': bytearray.fromhex(i.attributes[1]['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
+                        'address': s[:settings.STR_MASK_LEN].ljust(len(s), "*")
                         # 'address': ss58_encode(item.attributes[1]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
                     }
                 }
@@ -721,12 +724,13 @@ class BalanceTransferListResource(JSONAPIListResource):
             # if sender:
             #     sender_data = sender.serialize()
             # else:
+            s = bytearray.fromhex(item.attributes[0]['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
             sender_data = {
                 'type': 'account',
                 'id': item.attributes[0]['value'].replace('0x', ''),
                 'attributes': {
                     'id': item.attributes[0]['value'].replace('0x', ''),
-                    'address': bytearray.fromhex(item.attributes[0]['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
+                    'address': s[:settings.STR_MASK_LEN].ljust(len(s), "*")
                     # 'address': ss58_encode(item.attributes[0]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
                 }
             }
@@ -736,12 +740,13 @@ class BalanceTransferListResource(JSONAPIListResource):
             # if destination:
             #     destination_data = destination.serialize()
             # else:
+            s = bytearray.fromhex(item.attributes[1]['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
             destination_data = {
                 'type': 'account',
                 'id': item.attributes[1]['value'].replace('0x', ''),
                 'attributes': {
                     'id': item.attributes[1]['value'].replace('0x', ''),
-                    'address': bytearray.fromhex(item.attributes[1]['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
+                    'address': s[:settings.STR_MASK_LEN].ljust(len(s), "*")
                     # 'address': ss58_encode(item.attributes[1]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
                 }
             }
@@ -804,12 +809,13 @@ class BalanceTransferDetailResource(JSONAPIDetailResource):
         # if sender:
         #     sender_data = sender.serialize()
         # else:
+        s = bytearray.fromhex(item.attributes[0]['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
         sender_data = {
             'type': 'account',
             'id': item.attributes[0]['value'].replace('0x', ''),
             'attributes': {
                 'id': item.attributes[0]['value'].replace('0x', ''),
-                'address': bytearray.fromhex(item.attributes[0]['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
+                'address': s[:settings.STR_MASK_LEN].ljust(len(s), "*")
                 # 'address': ss58_encode(item.attributes[0]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
             }
         }
@@ -819,12 +825,13 @@ class BalanceTransferDetailResource(JSONAPIDetailResource):
         # if destination:
         #     destination_data = destination.serialize()
         # else:
+        s = bytearray.fromhex(item.attributes[1]['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
         destination_data = {
             'type': 'account',
             'id': item.attributes[1]['value'].replace('0x', ''),
             'attributes': {
                 'id': item.attributes[1]['value'].replace('0x', ''),
-                'address': bytearray.fromhex(item.attributes[1]['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
+                'address': s[:settings.STR_MASK_LEN].ljust(len(s), "*")
                 # 'address': ss58_encode(item.attributes[1]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
             }
         }
