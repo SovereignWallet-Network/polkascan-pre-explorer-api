@@ -78,7 +78,7 @@ app.add_route('/runtime-storage/{item_id}', polkascan.RuntimeStorageDetailResour
 app.add_route('/runtime-constant', polkascan.RuntimeConstantListResource())
 app.add_route('/runtime-constant/{item_id}', polkascan.RuntimeConstantDetailResource())
 app.add_route('/runtime-type', polkascan.RuntimeTypeListResource())
-app.add_route('/networkstats/{network_id}', polkascan.NetworkStatisticsResource())
+# app.add_route('/networkstats/{network_id}', polkascan.NetworkStatisticsResource())
 app.add_route('/balances/transfer', polkascan.BalanceTransferListResource())
 app.add_route('/balances/transfer/{item_id}', polkascan.BalanceTransferDetailResource())
 app.add_route('/account', polkascan.AccountResource())
