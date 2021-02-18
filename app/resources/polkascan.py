@@ -294,8 +294,8 @@ class ExtrinsicDetailResource(JSONAPIDetailResource):
                 extrinsic_idx=item.extrinsic_idx
             ).first()
             if event_data:
-                # print("event", event_data.attributes)
-                data['attributes']['event_params']= event_data.attributes
+                print("transfer event data: ", event_data.attributes)
+                data['attributes']['event_params']= getFormattedTransferEvent(event_data.attributes)
 
         if item.error:
             # Retrieve ExtrinsicFailed event
@@ -323,6 +323,31 @@ class ExtrinsicDetailResource(JSONAPIDetailResource):
 
         return data
 
+def getFormattedTransferEvent(event_attribs):
+    """
+    Formats the given balance transfer event attributes to human readable dict. 
+    """
+    # balance transfer event will have 3 information
+    # 1. sender_did 2. receiver_did 3. amount
+    sender = ""
+    receiver = ""
+    amount = ""
+    if isinstance(event_attribs, list) and len(event_attribs) == 3:
+        # Check the types of data before parsing
+        if event_attribs[0]['type'] == 'Did':
+            sender_did = bytearray.fromhex(event_attribs[0]['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
+            sender = sender_did[:settings.STR_MASK_LEN].ljust(settings.STR_DID_LEN, "*")
+        if event_attribs[1]['type'] == 'Did':
+            receiver_did = bytearray.fromhex(event_attribs[1]['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
+            receiver = receiver_did[:settings.STR_MASK_LEN].ljust(settings.STR_DID_LEN, "*")
+        if event_attribs[2]['type'] == 'Balance':
+            amount = event_attribs[2]['value']
+    return {
+        "sender": sender,
+        "receiver": receiver,
+        "amount": amount
+    }
+       
 
 class EventsListResource(JSONAPIListResource):
 
