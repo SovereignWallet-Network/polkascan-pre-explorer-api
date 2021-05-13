@@ -590,11 +590,11 @@ class BalanceTransferHistoryListResource(JSONAPIListResource):
 
         return {
             'type': 'balancetransfer',
-            'id': '{}-{}'.format(item.block_id, item.event_idx),
+            'id': '{}-{}'.format(item.block_id, item.extrinsic_idx),
             'attributes': {
                 'block_id': item.block_id,
                 'event_id': item.event_id,
-                'event_idx': '{}-{}'.format(item.block_id, item.event_idx),
+                'event_idx': '{}-{}'.format(item.block_id, item.extrinsic_idx),
                 'sender': sender_data,
                 'destination': destination_data,
                 'value': value,
@@ -675,11 +675,11 @@ class BalanceTransferHistoryDetailResource(JSONAPIResource):
                 block = Block.query(self.session).get(i.block_id)
                 transfer_data.append({
                     'type': 'balancetransfer',
-                    'id': '{}-{}'.format(i.block_id, i.event_idx),
+                    'id': '{}-{}'.format(i.block_id, i.extrinsic_idx),
                     'attributes': {
                         'block_id': i.block_id,
                         'datetime': block.datetime.replace(tzinfo=pytz.UTC).isoformat(),
-                        'event_idx': '{}-{}'.format(i.block_id, i.event_idx),
+                        'event_idx': '{}-{}'.format(i.block_id, i.extrinsic_idx),
                         'sender': sender_data,
                         'destination': destination_data,
                         'value': i.attributes[2]['value'],
@@ -809,11 +809,11 @@ class BalanceTransferListResource(JSONAPIListResource):
 
         return {
             'type': 'balancetransfer',
-            'id': '{}-{}'.format(item.block_id, item.event_idx),
+            'id': '{}-{}'.format(item.block_id, item.extrinsic_idx),
             'attributes': {
                 'block_id': item.block_id,
                 'event_id': item.event_id,
-                'event_idx': '{}-{}'.format(item.block_id, item.event_idx),
+                'event_idx': '{}-{}'.format(item.block_id, item.extrinsic_idx),
                 'sender': sender_data,
                 'destination': destination_data,
                 'value': value,
@@ -869,10 +869,10 @@ class BalanceTransferDetailResource(JSONAPIDetailResource):
 
         return {
             'type': 'balancetransfer',
-            'id': '{}-{}'.format(item.block_id, item.event_idx),
+            'id': '{}-{}'.format(item.block_id, item.extrinsic_idx),
             'attributes': {
                 'block_id': item.block_id,
-                'event_idx': '{}-{}'.format(item.block_id, item.event_idx),
+                'event_idx': '{}-{}'.format(item.block_id, item.extrinsic_idx),
                 'sender': sender_data,
                 'destination': destination_data,
                 'value': item.attributes[2]['value'],
