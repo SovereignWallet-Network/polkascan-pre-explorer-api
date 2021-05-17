@@ -526,7 +526,9 @@ class BalanceTransferHistoryListResource(JSONAPIListResource):
             else:
                 # Convert text to hex & append with trailing 0's & hex prefix(0x)
                 print('BalanceTransferHistory fetch by DID')
-                account_id = '0x{:<064}'.format("".join("{:02x}".format(ord(c)) for c in params.get('filter[address]')))    
+                account_id = '0x{:<064}'.format("".join("{:02x}".format(ord(c)) for c in params.get('filter[address]')))   
+                # Just to ensure that the DID is not exceeding the length of 32 bytes
+                account_id = account_id[:66] 
             print('BalanceTransferHistoryListResource: account_id', account_id)
             query = Event.query(self.session).filter(Event.attributes.contains([{"$[*].value":[account_id]}])==1).all().order_by(Event.block_id.desc())
             # query = Query(Event).filter(Event.attributes.comparator.contains([account_id], '$[*].value'))
@@ -619,6 +621,8 @@ class BalanceTransferHistoryDetailResource(JSONAPIResource):
                 # Convert text to hex & append with trailing 0's & hex prefix(0x)
                 print('BalanceTransferHistory fetch by DID')
                 account_id = "0x{:<064}".format("".join("{:02x}".format(ord(c)) for c in did))  
+                # For lengthy DID's (Eg: XT's), convert to 32 byte size
+                account_id = account_id[:66]
                 print("raw_did",account_id)  
             # query = Event.query(self.session).filter(func.json_contains({'attributes':[{'value':account_id}]})).all()
             # query = self.session().query(Event).filter(Event.attributes.contains({'value': account_id}))
