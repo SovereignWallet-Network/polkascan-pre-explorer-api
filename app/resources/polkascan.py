@@ -296,6 +296,15 @@ class ExtrinsicDetailResource(JSONAPIDetailResource):
             if event_data:
                 print("transfer event data: ", event_data.attributes)
                 data['attributes']['event_params']= getFormattedTransferEvent(event_data.attributes)
+        if item.module_id == 'balances' and item.call_id=='transfer_with_memo' and len(item.params) >= 2:
+            event_data = Event.query(self.session).filter_by(
+                block_id=item.block_id,
+                event_id='Transfer',
+                extrinsic_idx=item.extrinsic_idx
+            ).first()
+            if event_data:
+                print("transfer event data: ", event_data.attributes)
+                data['attributes']['event_params']= getFormattedTransferEvent(event_data.attributes, item.params[2])
 
         if item.error:
             # Retrieve ExtrinsicFailed event
@@ -323,29 +332,35 @@ class ExtrinsicDetailResource(JSONAPIDetailResource):
 
         return data
 
-def getFormattedTransferEvent(event_attribs):
+def getFormattedTransferEvent(event_attribs, memo_param=False):
     """
     Formats the given balance transfer event attributes to human readable dict. 
     """
-    # balance transfer event will have 3 information
-    # 1. sender_did 2. receiver_did 3. amount
+    # balance transfer event will have 4 information
+    # 1. sender_did 2. receiver_did 3. amount 4. memo
     sender = ""
     receiver = ""
     amount = ""
-    if isinstance(event_attribs, list) and len(event_attribs) == 3:
-        # Check the types of data before parsing
-        if event_attribs[0]['type'] == 'Did':
-            sender_did = bytearray.fromhex(event_attribs[0]['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
+    memo = ""
+    for event in event_attribs:
+        if event['type'] == 'Did' and event_attribs.index(event) == 0:
+            # its a sender
+            sender_did = bytearray.fromhex(event['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
             sender = sender_did[:settings.STR_MASK_LEN].ljust(settings.STR_DID_LEN, "*")
-        if event_attribs[1]['type'] == 'Did':
-            receiver_did = bytearray.fromhex(event_attribs[1]['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
+        elif event['type'] == 'Did' and event_attribs.index(event) == 1:
+            # its receiver
+            receiver_did = bytearray.fromhex(event['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
             receiver = receiver_did[:settings.STR_MASK_LEN].ljust(settings.STR_DID_LEN, "*")
-        if event_attribs[2]['type'] == 'Balance':
-            amount = event_attribs[2]['value']
+        elif event['type'] == 'Balance':
+            amount = event['value']
+    if memo_param:
+        print('Found memo!')
+        memo = memo_param['value']
     return {
         "sender": sender,
         "receiver": receiver,
-        "amount": amount
+        "amount": amount,
+        "memo": memo
     }
        
 
