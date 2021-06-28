@@ -227,6 +227,23 @@ class BlockTotal(BaseModel):
     def get_x_axis_value(self):
         return self.id
 
+class Stats(BaseModel):
+    __tablename__ = 'stats'
+
+    serialize_type = 'stats'
+
+    id = sa.Column(sa.String(64), primary_key=True, autoincrement=False)
+    token_name = sa.Column(sa.String(64))
+    site = sa.Column(sa.String(200))
+    total_supply = sa.Column(sa.Integer(), nullable=True)
+    curent_circulation = sa.Column(sa.Integer(), nullable=True)
+    decimals = sa.Column(sa.Integer(), nullable=True)
+
+    def serialize_formatting_hook(self, obj_dict):
+        return obj_dict
+
+    def get_x_axis_value(self):
+        return self.id
 
 class Event(BaseModel):
     __tablename__ = 'data_event'

@@ -33,7 +33,7 @@ from app import settings
 from app.models.data import Block, Extrinsic, Event, RuntimeCall, RuntimeEvent, Runtime, RuntimeModule, \
     RuntimeCallParam, RuntimeEventAttribute, RuntimeType, RuntimeStorage, Account, Session, Contract, \
     BlockTotal, SessionValidator, Log, AccountIndex, RuntimeConstant, SessionNominator, \
-    RuntimeErrorMessage, SearchIndex, AccountInfoSnapshot
+    RuntimeErrorMessage, SearchIndex, AccountInfoSnapshot, Stats
 from app.resources.base import JSONAPIResource, JSONAPIListResource, JSONAPIDetailResource, BaseResource
 from app.utils.ss58 import ss58_decode, ss58_encode
 from scalecodec.base import RuntimeConfiguration
@@ -463,7 +463,62 @@ class LogDetailResource(JSONAPIDetailResource):
             return None
         return Log.query(self.session).get(item_id.split('-'))
 
+class StatsResource(JSONAPIResource):
 
+    cache_expiration_time = 6
+
+    def on_get(self, req, resp, currency_id='metamui'):
+        resp.status = falcon.HTTP_200
+
+        # TODO make caching more generic for custom resources
+
+        cache_key = '{}-{}'.format(req.method, req.url)
+
+        response = self.cache_region.get(cache_key, self.cache_expiration_time)
+
+        if response is NO_VALUE:
+            print('metamui stats not exist in cache!')
+            # Temporary hack to get the network stats
+            # TODO: Fix BlockTotal saving to DB
+            stats = Stats.query(self.session).get(currency_id)
+            # print("best_block: ",best_block.id)
+            if stats:
+                response = self.get_jsonapi_response(
+                    data={
+                        'type': 'currency_stats',
+                        'id': currency_id,
+                        'attributes': {
+                            'currency_id': stats.id,
+                            'token_name': stats.token_name,
+                            'official_site': stats.site,
+                            'currency_decimals': stats.decimals,
+                            'current_circulation': stats.current_circulation,
+                            'total_supply': stats.total_supply
+                        }
+                    },
+                )
+            else:
+                response = self.get_jsonapi_response(
+                    data={
+                        'type': 'currency_stats',
+                        'id': currency_id,
+                        'attributes': {
+                            'currency_id': 'N/A',
+                            'token_name': 'N/A',
+                            'official_site': 'N/A',
+                            'currency_decimals': 'N/A',
+                            'current_circulation': 'N/A',
+                            'total_supply': 'N/A'
+                        }
+                    },
+                )
+            self.cache_region.set(cache_key, response)
+            resp.set_header('X-Cache', 'MISS')
+        else:
+            resp.set_header('X-Cache', 'HIT')
+
+        resp.media = response
+        
 class NetworkStatisticsResource(JSONAPIResource):
 
     cache_expiration_time = 6
