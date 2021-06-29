@@ -62,7 +62,7 @@ class JSONAPIResource(BaseResource):
                     "WEB3SCAN",
                     "POLKASCAN",
                     "openAware BV",
-                    "Metablockchain"
+                    "MetaMUI Blockchain"
                 ]
             },
             'errors': [],
