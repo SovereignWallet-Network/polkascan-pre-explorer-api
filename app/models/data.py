@@ -234,9 +234,10 @@ class Stats(BaseModel):
 
     id = sa.Column(sa.String(64), primary_key=True, autoincrement=False)
     token_name = sa.Column(sa.String(64))
-    site = sa.Column(sa.String(200))
+    symbol = sa.Column(sa.String(64))
+    site = sa.Column(sa.String(256))
     total_supply = sa.Column(sa.Integer(), nullable=True)
-    curent_circulation = sa.Column(sa.Integer(), nullable=True)
+    current_circulation = sa.Column(sa.Integer(), nullable=True)
     decimals = sa.Column(sa.Integer(), nullable=True)
 
     def serialize_formatting_hook(self, obj_dict):

@@ -518,55 +518,49 @@ class StatsResource(JSONAPIResource):
             resp.set_header('X-Cache', 'HIT')
 
         resp.media = response
-        
+
 class NetworkStatisticsResource(JSONAPIResource):
 
-    cache_expiration_time = 6
+    cache_expiration_time = 60
 
-    def on_get(self, req, resp, network_id=None):
+    def on_get(self, req, resp, currency_id='metamui'):
         resp.status = falcon.HTTP_200
-
-        # TODO make caching more generic for custom resources
-
         cache_key = '{}-{}'.format(req.method, req.url)
 
         response = self.cache_region.get(cache_key, self.cache_expiration_time)
 
         if response is NO_VALUE:
-            print('stats not exist in cache!')
-            # Temporary hack to get the network stats
-            # TODO: Fix BlockTotal saving to DB
-            best_block = Block.query(self.session).filter_by(id=self.session.query(func.max(Block.id)).one()[0]).first()
-            # print("best_block: ",best_block.id)
-            if best_block:
+            print('metamui stats not exist in cache!')
+            stats = Stats.query(self.session).get(currency_id)
+            if stats:
                 response = self.get_jsonapi_response(
                     data={
-                        'type': 'networkstats',
-                        'id': network_id,
+                        'type': 'currency_stats',
+                        'id': currency_id,
                         'attributes': {
-                            'best_block': best_block.id,
-                            'total_signed_extrinsics': Extrinsic.query(self.session).filter_by(signed=True).count(),
-                            'total_events': Event.query(self.session).count(),
-                            'total_events_module': Event.query(self.session).filter_by(system=False).count(),
-                            'total_blocks': Block.query(self.session).count(),
-                            'total_accounts': 0,
-                            'total_runtimes': Runtime.query(self.session).count()
+                            'currency_id': stats.id,
+                            'currency_name': stats.token_name,
+                            'currency_symbol': stats.symbol,
+                            'official_site': stats.site,
+                            'currency_decimals': stats.decimals,
+                            'current_circulation': stats.current_circulation,
+                            'total_supply': stats.total_supply
                         }
                     },
                 )
             else:
                 response = self.get_jsonapi_response(
                     data={
-                        'type': 'networkstats',
-                        'id': network_id,
+                        'type': 'currency_stats',
+                        'id': currency_id,
                         'attributes': {
-                            'best_block': 0,
-                            'total_signed_extrinsics': 0,
-                            'total_events': 0,
-                            'total_events_module': 0,
-                            'total_blocks': 'N/A',
-                            'total_accounts': 0,
-                            'total_runtimes': 0
+                            'currency_id': 'N/A',
+                            'currency_name': 'N/A',
+                            'currency_symbol': 'N/A',
+                            'official_site': 'N/A',
+                            'currency_decimals': 'N/A',
+                            'current_circulation': 'N/A',
+                            'total_supply': 'N/A'
                         }
                     },
                 )
