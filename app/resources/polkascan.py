@@ -36,6 +36,7 @@ from app.models.data import Block, Extrinsic, Event, RuntimeCall, RuntimeEvent, 
     RuntimeErrorMessage, SearchIndex, AccountInfoSnapshot, Stats
 from app.resources.base import JSONAPIResource, JSONAPIListResource, JSONAPIDetailResource, BaseResource
 from app.utils.ss58 import ss58_decode, ss58_encode
+from app.utils.jwt_validator import validateToken
 from scalecodec.base import RuntimeConfiguration
 from substrateinterface import SubstrateInterface
 
@@ -691,6 +692,12 @@ class BalanceTransferHistoryDetailResource(JSONAPIResource):
     def on_get(self, req, resp, did=None):
         transfer_data = [] 
         resp.status = falcon.HTTP_200
+        auth_user = False
+        # print("auth: ",req.auth)
+        tokenValidation = validateToken(req.auth)
+        print(tokenValidation)
+        if tokenValidation and 'did' in tokenValidation:
+            auth_user = tokenValidation['did']
         if did:
             print('BalanceTransferHistoryListResource: ', did)
             if did[0:2] == '0x':
@@ -730,23 +737,31 @@ class BalanceTransferHistoryDetailResource(JSONAPIResource):
                     )
                 )
             for i in events:
-                s = bytearray.fromhex(i.attributes[0]['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
+                sender = bytearray.fromhex(i.attributes[0]['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
+                reciever = bytearray.fromhex(i.attributes[1]['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
+                
+                if not auth_user or auth_user != did:
+                    print('User unauthenticated')
+                    sender = sender[:settings.STR_MASK_LEN].ljust(settings.STR_DID_LEN, "*")
+                    reciever = reciever[:settings.STR_MASK_LEN].ljust(settings.STR_DID_LEN, "*")
+                
                 sender_data = {
                     'type': 'account',
                     'id': i.attributes[0]['value'].replace('0x', ''),
                     'attributes': {
                         'id': i.attributes[0]['value'].replace('0x', ''),
-                        'address': s[:settings.STR_MASK_LEN].ljust(settings.STR_DID_LEN, "*")
+                        'address': sender
+                        # 'address': s[:settings.STR_MASK_LEN].ljust(settings.STR_DID_LEN, "*")
                         # 'address': ss58_encode(item.attributes[0]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
                     }
                 }
-                s = bytearray.fromhex(i.attributes[1]['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
                 destination_data = {
                     'type': 'account',
                     'id': i.attributes[1]['value'].replace('0x', ''),
                     'attributes': {
                         'id': i.attributes[1]['value'].replace('0x', ''),
-                        'address': s[:settings.STR_MASK_LEN].ljust(settings.STR_DID_LEN, "*")
+                        'address': reciever
+                        # 'address': s[:settings.STR_MASK_LEN].ljust(settings.STR_DID_LEN, "*")
                         # 'address': ss58_encode(item.attributes[1]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
                     }
                 }

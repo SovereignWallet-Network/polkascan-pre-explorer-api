@@ -171,7 +171,7 @@ class JSONAPIDetailResource(JSONAPIResource, ABC):
 
     def process_get_response(self, req, resp, **kwargs):
         auth_user = False
-        print("auth: ",req.auth)
+        # print("auth: ",req.auth)
         tokenValidation = validateToken(req.auth)
         print(tokenValidation)
         if tokenValidation and 'did' in tokenValidation:
