@@ -24,6 +24,8 @@ DB_HOST = os.environ.get("DB_HOST", "mysql")
 DB_PORT = os.environ.get("DB_PORT", 3306)
 DB_USERNAME = os.environ.get("DB_USERNAME", "root")
 DB_PASSWORD = os.environ.get("DB_PASSWORD", "root")
+VALIDATOR_KEY = os.environ.get("VALIDATOR_KEY", "secret")
+VALIDATOR_ISSUER = os.environ.get("VALIDATOR_ISSUER", "did:ssid:blockchain")
 
 DB_CONNECTION = os.environ.get("DB_CONNECTION", "mysql+mysqlconnector://{}:{}@{}:{}/{}".format(
     DB_USERNAME, DB_PASSWORD, DB_HOST, DB_PORT, DB_NAME
