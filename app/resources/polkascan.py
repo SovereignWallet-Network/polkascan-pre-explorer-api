@@ -91,7 +91,7 @@ class BlockTotalDetailsResource(JSONAPIDetailResource):
             if block:
                 return BlockTotal.query(self.session).get(block.id)
 
-    def serialize_item(self, item):
+    def serialize_item(self, item, auth_user=False):
         # Exclude large params from list view
         data = item.serialize()
 
@@ -221,7 +221,7 @@ class ExtrinsicDetailResource(JSONAPIDetailResource):
         return 'extrinsic_id'
 
     def get_item(self, item_id):
-
+        print("Called: 2")
         if item_id[0:2] == '0x':
             extrinsic = Extrinsic.query(self.session).filter_by(extrinsic_hash=item_id[2:]).first()
         else:
@@ -266,7 +266,7 @@ class ExtrinsicDetailResource(JSONAPIDetailResource):
 
         return params
 
-    def serialize_item(self, item):
+    def serialize_item(self, item, auth=False):
         data = item.serialize()
 
         runtime_call = RuntimeCall.query(self.session).filter_by(
@@ -295,7 +295,7 @@ class ExtrinsicDetailResource(JSONAPIDetailResource):
             ).first()
             if event_data:
                 print("transfer event data: ", event_data.attributes)
-                data['attributes']['event_params']= getFormattedTransferEvent(event_data.attributes)
+                data['attributes']['event_params']= getFormattedTransferEvent(event_data.attributes, auth)
         if item.module_id == 'balances' and item.call_id=='transfer_with_memo' and len(item.params) >= 2:
             event_data = Event.query(self.session).filter_by(
                 block_id=item.block_id,
@@ -304,7 +304,7 @@ class ExtrinsicDetailResource(JSONAPIDetailResource):
             ).first()
             if event_data:
                 print("transfer event data: ", event_data.attributes)
-                data['attributes']['event_params']= getFormattedTransferEvent(event_data.attributes, item.params[2])
+                data['attributes']['event_params']= getFormattedTransferEvent(event_data.attributes, auth, item.params[2])
 
         if item.error:
             # Retrieve ExtrinsicFailed event
@@ -332,7 +332,7 @@ class ExtrinsicDetailResource(JSONAPIDetailResource):
 
         return data
 
-def getFormattedTransferEvent(event_attribs, memo_param=False):
+def getFormattedTransferEvent(event_attribs, auth_user, memo_param=False):
     """
     Formats the given balance transfer event attributes to human readable dict. 
     """
@@ -342,20 +342,25 @@ def getFormattedTransferEvent(event_attribs, memo_param=False):
     receiver = ""
     amount = ""
     memo = ""
+    print("auth_user: ",auth_user)
     for event in event_attribs:
         if event['type'] == 'Did' and event_attribs.index(event) == 0:
             # its a sender
-            sender_did = bytearray.fromhex(event['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
-            sender = sender_did[:settings.STR_MASK_LEN].ljust(settings.STR_DID_LEN, "*")
+            sender = bytearray.fromhex(event['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
+            # sender = sender[:settings.STR_MASK_LEN].ljust(settings.STR_DID_LEN, "*")
         elif event['type'] == 'Did' and event_attribs.index(event) == 1:
             # its receiver
-            receiver_did = bytearray.fromhex(event['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
-            receiver = receiver_did[:settings.STR_MASK_LEN].ljust(settings.STR_DID_LEN, "*")
+            receiver = bytearray.fromhex(event['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
+            # receiver = receiver[:settings.STR_MASK_LEN].ljust(settings.STR_DID_LEN, "*")
         elif event['type'] == 'Balance':
             amount = event['value']
     if memo_param:
         print('Found memo!')
         memo = memo_param['value']
+    if not auth_user or auth_user not in [sender, receiver]:
+        print('User not authenticated')
+        sender = sender[:settings.STR_MASK_LEN].ljust(settings.STR_DID_LEN, "*")
+        receiver = receiver[:settings.STR_MASK_LEN].ljust(settings.STR_DID_LEN, "*")
     return {
         "sender": sender,
         "receiver": receiver,
@@ -428,13 +433,14 @@ class EventDetailResource(JSONAPIDetailResource):
         # Convert all Did type in events with human readable format
         for attrib in event_data.attributes:
             if attrib['type'] == 'Did':
-                s = bytearray.fromhex(attrib['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
-                attrib['value'] = s[:settings.STR_MASK_LEN].ljust(settings.STR_DID_LEN, "*")
+                attrib['value'] = bytearray.fromhex(attrib['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
+                # Will decide on masking or not in serialization, based on auth status
+                # attrib['value'] = s[:settings.STR_MASK_LEN].ljust(settings.STR_DID_LEN, "*")
             refactor_attribs.append(attrib)    
         event_data.attributes = refactor_attribs;        
         return event_data
 
-    def serialize_item(self, item):
+    def serialize_item(self, item, auth_user=False):
         data = item.serialize()
 
         runtime_event = RuntimeEvent.query(self.session).filter_by(
@@ -443,6 +449,16 @@ class EventDetailResource(JSONAPIDetailResource):
             spec_version=item.spec_version_id
         ).first()
 
+        # List all the did's which comes under this event
+        event_dids = [x['value'] for x in item.attributes if x['type'] == 'Did']
+        print(event_dids)
+        # evaluate masking only if event has any DID 
+        if event_dids:
+            if not auth_user or auth_user not in event_dids:
+                print('User not authenticated')
+                for attrib in item.attributes:
+                    if attrib['type'] == 'Did':
+                        attrib['value'] = attrib['value'][:settings.STR_MASK_LEN].ljust(settings.STR_DID_LEN, "*")
         data['attributes']['documentation'] = runtime_event.documentation
 
         return data
@@ -895,20 +911,27 @@ class BalanceTransferDetailResource(JSONAPIDetailResource):
     def get_item(self, item_id):
         return Event.query(self.session).get(item_id.split('-'))
 
-    def serialize_item(self, item):
+    def serialize_item(self, item, auth_user=False):
 
         # sender = Account.query(self.session).get(item.attributes[0]['value'].replace('0x', ''))
 
         # if sender:
         #     sender_data = sender.serialize()
         # else:
-        s = bytearray.fromhex(item.attributes[0]['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
+        # TODO: Remove the hex did in id by removing its dependancies in explorer/ Metawallet App 
+        sender = bytearray.fromhex(item.attributes[0]['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
+        receiver = bytearray.fromhex(item.attributes[1]['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
+        if not auth_user or auth_user not in [sender, receiver]:
+            print('User not authenticated')
+            sender = sender[:settings.STR_MASK_LEN].ljust(settings.STR_DID_LEN, "*")
+            receiver = receiver[:settings.STR_MASK_LEN].ljust(settings.STR_DID_LEN, "*")
         sender_data = {
             'type': 'account',
             'id': item.attributes[0]['value'].replace('0x', ''),
             'attributes': {
                 'id': item.attributes[0]['value'].replace('0x', ''),
-                'address': s[:settings.STR_MASK_LEN].ljust(settings.STR_DID_LEN, "*")
+                'address': sender
+                # 'address': s[:settings.STR_MASK_LEN].ljust(settings.STR_DID_LEN, "*")
                 # 'address': ss58_encode(item.attributes[0]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
             }
         }
@@ -918,13 +941,13 @@ class BalanceTransferDetailResource(JSONAPIDetailResource):
         # if destination:
         #     destination_data = destination.serialize()
         # else:
-        s = bytearray.fromhex(item.attributes[1]['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
         destination_data = {
             'type': 'account',
             'id': item.attributes[1]['value'].replace('0x', ''),
             'attributes': {
                 'id': item.attributes[1]['value'].replace('0x', ''),
-                'address': s[:settings.STR_MASK_LEN].ljust(settings.STR_DID_LEN, "*")
+                'address': receiver
+                # 'address': s[:settings.STR_MASK_LEN].ljust(settings.STR_DID_LEN, "*")
                 # 'address': ss58_encode(item.attributes[1]['value'].replace('0x', ''), settings.SUBSTRATE_ADDRESS_TYPE)
             }
         }
@@ -1038,7 +1061,7 @@ class AccountDetailResource(JSONAPIDetailResource):
 
         return relationships
 
-    def serialize_item(self, item):
+    def serialize_item(self, item, auth_user=False):
         data = item.serialize()
 
         # Get balance history
@@ -1209,7 +1232,7 @@ class AccountIndexDetailResource(JSONAPIDetailResource):
 
         return relationships
 
-    def serialize_item(self, item):
+    def serialize_item(self, item, auth_user=False):
         data = item.serialize()
 
         if item.account:
@@ -1292,7 +1315,7 @@ class SessionValidatorDetailResource(JSONAPIDetailResource):
 
         return relationships
 
-    def serialize_item(self, item):
+    def serialize_item(self, item, auth_user=False):
         data = item.serialize()
 
         if item.validator_stash_account:

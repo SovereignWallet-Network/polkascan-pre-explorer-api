@@ -23,7 +23,7 @@ import falcon
 from dogpile.cache import CacheRegion
 from dogpile.cache.api import NO_VALUE
 from sqlalchemy.orm import Session
-
+from app.utils.jwt_validator import validateToken
 from app.models.base import BaseModel
 from app.settings import MAX_RESOURCE_PAGE_SIZE, DOGPILE_CACHE_SETTINGS
 
@@ -44,7 +44,7 @@ class JSONAPIResource(BaseResource):
     def get_meta(self):
         return {}
 
-    def serialize_item(self, item):
+    def serialize_item(self, item, auth_user=False):
         return item.serialize()
 
     def process_get_response(self, req, resp, **kwargs):
@@ -96,8 +96,11 @@ class JSONAPIResource(BaseResource):
 
     def on_get(self, req, resp, **kwargs):
 
-        cache_key = '{}-{}'.format(req.method, req.url)
-
+        auth = 'unauthenticated'
+        if req.auth:
+            auth = req.auth[len(auth)-5:]
+        cache_key = '{}-{}-{}'.format(req.method, req.url, auth)
+        print("Called: 1")
         if self.cache_expiration_time:
             # Try to retrieve request from cache
             cache_response = self.cache_region.get(cache_key, self.cache_expiration_time)
@@ -155,7 +158,7 @@ class JSONAPIListResource(JSONAPIResource, ABC):
 class JSONAPIDetailResource(JSONAPIResource, ABC):
 
     cache_expiration_time = DOGPILE_CACHE_SETTINGS['default_detail_cache_expiration_time']
-
+    # cache_expiration_time = None
     def get_item_url_name(self):
         return 'item_id'
 
@@ -167,21 +170,26 @@ class JSONAPIDetailResource(JSONAPIResource, ABC):
         return {}
 
     def process_get_response(self, req, resp, **kwargs):
+        auth_user = False
+        print("auth: ",req.auth)
+        tokenValidation = validateToken(req.auth)
+        print(tokenValidation)
+        if tokenValidation and 'did' in tokenValidation:
+            auth_user = tokenValidation['did']
         item = self.get_item(kwargs.get(self.get_item_url_name()))
-
+        print("Called: 3")
         if not item:
             response = {
                 'status': falcon.HTTP_404,
                 'media': None,
                 'cacheable': False
             }
-
         else:
 
             response = {
                 'status': falcon.HTTP_200,
                 'media': self.get_jsonapi_response(
-                    data=self.serialize_item(item),
+                    data=self.serialize_item(item, auth_user),
                     relationships=self.get_relationships(req.params.get('include', []), item),
                     meta=self.get_meta()
                 ),
