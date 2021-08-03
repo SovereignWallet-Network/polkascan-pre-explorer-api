@@ -588,6 +588,35 @@ class NetworkStatisticsResource(JSONAPIResource):
 
         resp.media = response
 
+class MetamuiStatisticsDetailResource(JSONAPIResource):
+
+    cache_expiration_time = 60
+
+    def on_get(self, req, resp, field_id=None):
+        resp.status = falcon.HTTP_200
+        cache_key = '{}-{}'.format(req.method, req.url)
+
+        response = self.cache_region.get(cache_key, self.cache_expiration_time)
+
+        if response is NO_VALUE:
+            print('metamui stats not exist in cache!')
+            stats = Stats.query(self.session).get('metamui')
+            if stats:
+                if field_id == 'total_supply':
+                    response = stats.total_supply
+                elif field_id == 'current_circulation':
+                    response = stats.current_circulation
+                else:
+                    response = "Requested data not found"
+            else:
+                response = "Requested data not found"
+            self.cache_region.set(cache_key, response)
+            resp.set_header('X-Cache', 'MISS')
+        else:
+            resp.set_header('X-Cache', 'HIT')
+
+        resp.media = response
+
 class BalanceTransferHistoryListResource(JSONAPIListResource):
 
     def get_query(self):
