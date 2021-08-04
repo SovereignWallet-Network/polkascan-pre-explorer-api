@@ -836,14 +836,51 @@ class BalanceTransferHistoryDetailResource(JSONAPIResource):
 class TopHoldersListResource(JSONAPIListResource):
     def get_query(self):
         transfer_data = [] 
-        query = """SELECT tt.block_id, tt.account_id, tt.balance_total, tt.balance_free, tt.balance_reserved
+        query = """select
+    DISTINCT mt.params->"$[1].valueRaw" as did_hex,
+    mt.params->"$[0].valueRaw" as public_key_hex,
+    (SELECT MaxBlockId
+                                        FROM metascan.data_account_info_snapshot tt0
+                                            INNER JOIN
+                                                (SELECT account_id, MAX(block_id) AS MaxBlockId
+                                                FROM metascan.data_account_info_snapshot
+                                                GROUP BY account_id) groupedtt
+                                            ON tt0.account_id = groupedtt.account_id
+                                            AND tt0.block_id = groupedtt.MaxBlockId
+                                            where tt0.account_id = did_hex
+                                            ORDER BY tt0.balance_total Desc) as block_id,
+    (SELECT tt.balance_total
                                         FROM metascan.data_account_info_snapshot tt
                                             INNER JOIN
                                                 (SELECT account_id, MAX(block_id) AS MaxBlockId
                                                 FROM metascan.data_account_info_snapshot
-                                                GROUP BY account_id) groupedtt 
-                                            ON tt.account_id = groupedtt.account_id 
-                                            AND tt.block_id = groupedtt.MaxBlockId WHERE tt.account_id LIKE "6469643a737369643a%" ORDER BY tt.balance_total Desc LIMIT 100"""
+                                                GROUP BY account_id) groupedtt
+                                            ON tt.account_id = groupedtt.account_id
+                                            AND tt.block_id = groupedtt.MaxBlockId
+                                            where tt.account_id = did_hex
+                                            ORDER BY tt.balance_total Desc ) as total_balance,
+	(SELECT tt1.balance_free
+                                        FROM metascan.data_account_info_snapshot tt1
+                                            INNER JOIN
+                                                (SELECT account_id, MAX(block_id) AS MaxBlockId
+                                                FROM metascan.data_account_info_snapshot
+                                                GROUP BY account_id) groupedtt
+                                            ON tt1.account_id = groupedtt.account_id
+                                            AND tt1.block_id = groupedtt.MaxBlockId
+                                            where tt1.account_id = did_hex
+                                            ORDER BY tt1.balance_total Desc ) as balance_free,
+	(SELECT tt2.balance_reserved
+                                        FROM metascan.data_account_info_snapshot tt2
+                                            INNER JOIN
+                                                (SELECT account_id, MAX(block_id) AS MaxBlockId
+                                                FROM metascan.data_account_info_snapshot
+                                                GROUP BY account_id) groupedtt
+                                            ON tt2.account_id = groupedtt.account_id
+                                            AND tt2.block_id = groupedtt.MaxBlockId
+                                            where tt2.account_id = did_hex
+                                            ORDER BY tt2.balance_total Desc) as balance_reserved
+From metascan.data_extrinsic as mt
+WHERE mt.module_id='did' AND (mt.call_id = 'add' OR mt.call_id = 'rotate_key') order by total_balance DESC LIMIT 100"""
         
             
         resultproxy = self.session.execute(query)
@@ -854,11 +891,12 @@ class TopHoldersListResource(JSONAPIListResource):
         return results
         
     def serialize_item(self, item):       
-        did = bytearray.fromhex(item['account_id'].replace('0x','')).decode().rstrip(' \t\r\n\0')
-        highest_balance = getHighestFormBalance(item['balance_total'])
+        # did = bytearray.fromhex(item['did_hex'].replace('0x','')).decode().rstrip(' \t\r\n\0')
+        highest_balance = getHighestFormBalance(item['total_balance'])
         return {
             "block_id": item['block_id'],
-            "did": did,
+            # "did": did,
+            "did": ss58_encode(str(json.loads(item["public_key_hex"]))),
             "balance_total": str(highest_balance),
             "balance_free": str(getHighestFormBalance(item['balance_free'])),
             "balance_reserved": str(getHighestFormBalance(item['balance_reserved'])),
