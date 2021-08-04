@@ -95,5 +95,6 @@ app.add_route('/session/validator/{item_id}', polkascan.SessionValidatorDetailRe
 app.add_route('/contract/contract', polkascan.ContractListResource())
 app.add_route('/contract/contract/{item_id}', polkascan.ContractDetailResource())
 app.add_route('/balances/transfer_history/', polkascan.BalanceTransferHistoryListResource())
+app.add_route('/balances/top_holders/', polkascan.TopHoldersListResource())
 app.add_route('/balances/transfer_history/{did}', polkascan.BalanceTransferHistoryDetailResource())
 app.add_route('/networkstats/metamui/{field_id}', polkascan.MetamuiStatisticsDetailResource())

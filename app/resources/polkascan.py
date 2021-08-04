@@ -24,6 +24,7 @@ import binascii
 import json
 import falcon
 import pytz
+import decimal
 from dogpile.cache.api import NO_VALUE
 from scalecodec.type_registry import load_type_registry_preset
 from sqlalchemy import func, tuple_, or_
@@ -39,6 +40,9 @@ from app.utils.ss58 import ss58_decode, ss58_encode
 from app.utils.jwt_validator import validateToken
 from scalecodec.base import RuntimeConfiguration
 from substrateinterface import SubstrateInterface
+
+# 1 Billion
+METAMUI_TOTAL =  decimal.Decimal("1000000000")
 
 
 class BlockDetailsResource(JSONAPIDetailResource):
@@ -829,7 +833,44 @@ class BalanceTransferHistoryDetailResource(JSONAPIResource):
                 "error": "ParamterException: Required DID"
             })       
            
-    
+class TopHoldersListResource(JSONAPIListResource):
+    def get_query(self):
+        transfer_data = [] 
+        query = """SELECT tt.block_id, tt.account_id, tt.balance_total, tt.balance_free, tt.balance_reserved
+                                        FROM metascan.data_account_info_snapshot tt
+                                            INNER JOIN
+                                                (SELECT account_id, MAX(block_id) AS MaxBlockId
+                                                FROM metascan.data_account_info_snapshot
+                                                GROUP BY account_id) groupedtt 
+                                            ON tt.account_id = groupedtt.account_id 
+                                            AND tt.block_id = groupedtt.MaxBlockId WHERE tt.account_id LIKE "6469643a737369643a%" ORDER BY tt.balance_total Desc LIMIT 100"""
+        
+            
+        resultproxy = self.session.execute(query)
+        results = [{column: value for column, value in rowproxy.items()} for rowproxy in resultproxy]
+        # sender = bytearray.fromhex(i.attributes[0]['value'].replace('0x','')).decode().rstrip(' \t\r\n\0')
+            
+        print(results)  
+        return results
+        
+    def serialize_item(self, item):       
+        did = bytearray.fromhex(item['account_id'].replace('0x','')).decode().rstrip(' \t\r\n\0')
+        highest_balance = getHighestFormBalance(item['balance_total'])
+        return {
+            "block_id": item['block_id'],
+            "did": did,
+            "balance_total": str(highest_balance),
+            "balance_free": str(getHighestFormBalance(item['balance_free'])),
+            "balance_reserved": str(getHighestFormBalance(item['balance_reserved'])),
+            "percentage": str(getPercentageBalance(highest_balance))
+        }
+
+def getHighestFormBalance(balanceInDecimal):
+    return 0 if (balanceInDecimal == 0 or balanceInDecimal == None) else round((balanceInDecimal / 1000000), 6)
+
+def getPercentageBalance(balanceInDecimal):
+    percentage_factor = decimal.Decimal("100")
+    return 0 if (balanceInDecimal == 0 or balanceInDecimal == None) else round(percentage_factor *(balanceInDecimal / METAMUI_TOTAL), 2)
 
 class BalanceTransferListResource(JSONAPIListResource):
 
