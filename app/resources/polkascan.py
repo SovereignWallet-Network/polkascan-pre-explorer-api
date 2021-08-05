@@ -889,7 +889,12 @@ WHERE mt.module_id='did' AND (mt.call_id = 'add' OR mt.call_id = 'rotate_key') o
             
         print(results)  
         return results
-        
+
+    def apply_paging(self, query, params):
+        page = int(params.get('page[number]', 1)) - 1
+        page_size = min(int(params.get('page[size]', 100)), settings.MAX_RESOURCE_PAGE_SIZE)
+        return query[page * page_size: page * page_size + page_size]
+
     def serialize_item(self, item):       
         # did = bytearray.fromhex(item['did_hex'].replace('0x','')).decode().rstrip(' \t\r\n\0')
         highest_balance = getHighestFormBalance(item['total_balance'])
