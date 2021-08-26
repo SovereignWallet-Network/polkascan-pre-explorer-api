@@ -8,9 +8,20 @@ def validateToken(token):
             print('No token')
             return False
         print(token)
-        token_data = jwt.decode(token, VALIDATOR_KEY, algorithms="HS256")
+        if not VALIDATOR_KEY:
+            print('No Validator is configured, cant validate the token')
+            return False
+        token_data = False
+        for validator in VALIDATOR_KEY:
+            try:
+                token_data = token_data = jwt.decode(token, validator, algorithms="HS256")
+                break
+            except jwt.InvalidSignatureError as e:
+                print("Not signed by this validator")
+                continue 
+        # token_data = jwt.decode(token, VALIDATOR_KEY, algorithms="HS256")
         print(token_data)
-        if 'iss' in token_data and token_data['iss'] == VALIDATOR_ISSUER:
+        if token_data and 'iss' in token_data and token_data['iss'] in VALIDATOR_ISSUER:
             return token_data['data']
         print('Token issuer is invalid')
         return False
